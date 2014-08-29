@@ -11,7 +11,11 @@
 
 #define GPIO_SET *(gpio+7)  // sets   bits which are 1 ignores bits which are 0
 #define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
-#define GPIO_READ(g) *(gpio+13) &= (1<<(g))
+// For GPIO# >= 32 (RPi B+)
+#define GPIO_SET_EXT *(gpio+8)  // sets   bits which are 1 ignores bits which are 0
+#define GPIO_CLR_EXT *(gpio+11) // clears bits which are 1 ignores bits which are 0
+
+#define GPIO_READ(g) (*(gpio+13+((g)>>5)) & (1<<((g)&31)))
 
 static volatile unsigned int *gpio = (unsigned int *)BCM2835_GPIO_REGS_BASE;
 
@@ -71,12 +75,18 @@ rtems_device_driver rpi_gpio_control(
   n = (int)(args->buffer);
   cmd = (int)(args->command);
   switch (cmd) {
-  case RPI_GPIO_SET : 
-    GPIO_SET = 1 << n;
+  case RPI_GPIO_SET :
+    if (n >= 32)
+      GPIO_SET_EXT = 1 << (n % 32);
+    else
+      GPIO_SET = 1 << n;
     break;
 
   case RPI_GPIO_CLR :
-    GPIO_CLR = 1 << n;
+    if (n >= 32)
+      GPIO_CLR_EXT = 1 << (n % 32);
+    else
+      GPIO_CLR = 1 << n;
     break;
 
   case RPI_GPIO_OUT :

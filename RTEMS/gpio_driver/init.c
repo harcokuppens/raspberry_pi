@@ -1,6 +1,7 @@
 /*
  * RPi GPIO test example
- * blink ACT led (GPIO 16) + receive input from GPIO 24
+ * blink ACT led (GPIO 16 or 47) + receive input from GPIO 17 and update period
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,11 +13,19 @@
 
 #include "rpi_gpio.h"
 
+#define PERIOD_NS   100000000
+
 int fd;
 int gpio_input;
 
-#define G_IN    24
-#define G_OUT   25
+struct itimerspec ti, ti_old;
+timer_t myTimer;
+
+#define G_IN    17
+
+// Led
+//#define G_OUT   16 // RPi B
+#define G_OUT   47 // RPi B+
 
 void got_signal (int sig)
 {
@@ -31,6 +40,18 @@ void got_signal (int sig)
   if ((input = ioctl (fd, RPI_GPIO_READ, G_IN)) != gpio_input) {
     printf ("input= %d\n", ioctl (fd, RPI_GPIO_READ, G_IN));
     gpio_input = input;
+
+    // Update timer
+    if (gpio_input % 2)
+      ti.it_interval.tv_nsec = PERIOD_NS;
+    else
+      ti.it_interval.tv_nsec = PERIOD_NS * 2;
+
+    ti.it_value.tv_sec = 0;
+    ti.it_value.tv_nsec = 1000000;
+    ti.it_interval.tv_sec = 0;
+
+    timer_settime(myTimer, 0, &ti, &ti_old);
   }
 
   n++;
@@ -41,9 +62,7 @@ void got_signal (int sig)
 
 void *POSIX_Init() 
 {
-  timer_t myTimer;
   struct sigaction sig;
-  struct itimerspec ti, ti_old;
   struct sigevent event;
   sigset_t mask;
 
@@ -78,9 +97,9 @@ void *POSIX_Init()
   timer_create (CLOCK_REALTIME, &event, &myTimer);
 
   ti.it_value.tv_sec = 0;
-  ti.it_value.tv_nsec = 5000000;
+  ti.it_value.tv_nsec = 1000000;
   ti.it_interval.tv_sec = 0;
-  ti.it_interval.tv_nsec = 10000000;
+  ti.it_interval.tv_nsec = PERIOD_NS;
 
   timer_settime(myTimer, 0, &ti, &ti_old);
 
